@@ -45,5 +45,8 @@
   },
   "devDependencies": {
     "typescript": "2.4.2"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.2"
   }
 }
