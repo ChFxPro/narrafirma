@@ -215,12 +215,18 @@ function resetIndexesForJournal(journal) {
 // Loads all journals after determining identifiers from storage
 function indexAllJournals() {
     log("=================================== indexAllJournals");
-    
+
     var journalsDirectory = configuration.journalsDirectory;
-    
+
     if (!isUsingFiles()) return;
-        
-    var fileNames;
+
+    // Ensure journals directory exists so readdirSync does not fail on first run
+    if (!fs.existsSync(journalsDirectory)) {
+        fs.mkdirSync(journalsDirectory, { recursive: true });
+        log("Created journals directory: " + journalsDirectory);
+    }
+
+    var fileNames = [];
     try {
         fileNames = fs.readdirSync(journalsDirectory);
     } catch (error) {
@@ -344,8 +350,8 @@ function indexAllMessagesInDirectory(journal, directory) {
     // TODO: If files are added while reindexing is going on and reindexing takes a long time, the new files could be reject as later than this maximum
     // log("indexAllMessagesInDirectory", directory);
     var maximumAllowedTimestamp = utility.calculateMaximumAllowedTimestamp(configuration.maximumTimeDriftAllowed_ms);
-    
-    var fileNames;
+
+    var fileNames = [];
     try {
         fileNames = fs.readdirSync(directory);
     } catch(error) {
