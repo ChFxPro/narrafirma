@@ -21,6 +21,15 @@ var pointrelAccessControl = require("./pointrel20150417/pointrelAccessControl");
 //Use default superuser information
 var superuserInformation = null;
 
+// Ensure journals directory exists in deployed environment
+const path = require("path");
+const journalsPath = path.join(__dirname, "../server-data/journals");
+
+if (!fs.existsSync(journalsPath)) {
+    fs.mkdirSync(journalsPath, { recursive: true });
+    console.log("✅ Created missing journals directory");
+}
+
 // To calculate hashed "secret" password for developer testing:
 // var pointrelUtility = require("./pointrel20150417/pointrelUtility");
 // console.log("hash of secret", pointrelUtility.calculateSHA256("someSalt" + "secret"));
