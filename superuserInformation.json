@@ -1,4 +1,5 @@
 {
-  "superuserUsername": "admin",
-  "superuserPassword": "SparkPoint25"
+  "userIdentifier": "admin",
+  "salt": "sparkroot",
+  "hashOfPassword": "359b5d2e06d926e3df3168a77ef25a2df96304a7a99c5562a2bb35f63c167df2"
 }
