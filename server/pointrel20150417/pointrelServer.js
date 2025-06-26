@@ -32,6 +32,12 @@ var messageFileSuffix = ".pce";
 // Standard nodejs modules
 var fs = require('fs');
 
+// Supabase client initialization
+const { createClient } = require('@supabase/supabase-js');
+const SUPABASE_URL = 'https://bexeycxoigdckgcgjcvz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJleGV5Y3hvaWdkY2tnY2dqY3Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5NjAyNzksImV4cCI6MjA2NjUzNjI3OX0.KCiSJMdVJ91I6OaPYIr3B8YmeyD0PnsjPq2v8fJB_aQ';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // Our modules
 var utility = require('./pointrelUtility');
 var log = utility.log;
@@ -213,53 +219,55 @@ function resetIndexesForJournal(journal) {
 }
 
 // Loads all journals after determining identifiers from storage
-function indexAllJournals() {
+async function indexAllJournals() {
     log("=================================== indexAllJournals");
 
-    var journalsDirectory = configuration.journalsDirectory;
-
-    if (!isUsingFiles()) return;
-
-    // Ensure journals directory exists so readdirSync does not fail on first run
-    if (!fs.existsSync(journalsDirectory)) {
-        fs.mkdirSync(journalsDirectory, { recursive: true });
-        log("Created journals directory: " + journalsDirectory);
-    }
-
-    var fileNames = [];
     try {
-        fileNames = fs.readdirSync(journalsDirectory);
-    } catch (error) {
-        console.log("ERROR: Problem reading directory", journalsDirectory, error);
-    }
-    for (var fileNameIndex = 0; fileNameIndex < fileNames.length; fileNameIndex++) {
-        var fileName = fileNames[fileNameIndex];
-        if (fileName.charAt(0) === ".") continue;
-        var stat = fs.statSync(journalsDirectory + fileName);
-        if (stat.isDirectory()) {
-            console.log("Adding journal: ", fileName);
-            // TODO: Wasteful in this case that addJournalSync will check again if the journal exists
-            addJournalSync(fileName);
+        const { data, error } = await supabase
+            .from('journals')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Supabase error fetching journals', error);
+            return;
         }
-    }
 
-    log("indexAllJournals found journals", journals);
-    
-    // TODO: Load journals from disk
-    for (var key in journals) {
-        var journal = journals[key];
-        log("indexing journal", journal.journalIdentifier);
-        resetIndexesForJournal(journal);
-        
-        indexAllMessagesInDirectory(journal, journal.journalDirectory);
-        
-        var messageCount = 0;
-        for (var messageKey in journal.sha256AndLengthToReceivedRecordMap) messageCount++;
-        log("journalIdentifier:", journal.journalIdentifier, "indexed message count:", messageCount);
-    }
+        var journalsByName = {};
+        for (var i = 0; i < data.length; i++) {
+            var row = data[i];
+            var name = row.name;
+            if (!journalsByName[name]) {
+                var journal = makeJournal(name, null);
+                journals[JSON.stringify(name)] = journal;
+                journalsByName[name] = journal;
+            }
 
-    // console.log("messageIdentifier index", indexes.messageIdentifierToReferences);
-    log("Done with indexAllJournals");
+            var journalForRow = journalsByName[name];
+            var message = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+            var sha = message.__pointrel_sha256AndLength;
+            var topicSHA = null;
+            var topicTimestamp = null;
+            if (message._topicIdentifier !== undefined) {
+                topicSHA = utility.calculateCanonicalSHA256ForObject(message._topicIdentifier);
+                topicTimestamp = message._topicTimestamp || row.created_at;
+            }
+
+            ingestMessage(journalForRow, row.created_at, sha, row.id, topicSHA, topicTimestamp, message);
+        }
+
+        log("indexAllJournals found journals", journals);
+
+        for (var key in journals) {
+            var journal = journals[key];
+            var messageCount = journal.allMessageReceivedRecordsSortedByTimestamp.length;
+            log("journalIdentifier:", journal.journalIdentifier, "indexed message count:", messageCount);
+        }
+
+        log("Done with indexAllJournals");
+    } catch (e) {
+        console.error('indexAllJournals failed', e);
+    }
 }
 
 // Intended to be used by other pointrel modules, not by the client
@@ -269,6 +277,24 @@ function getAllJournalIdentifiers() {
         result.push(journals[key].journalIdentifier);
     }
     return result;
+}
+
+async function loadJournalByName(journalName) {
+    try {
+        const { data, error } = await supabase
+            .from('journals')
+            .select('*')
+            .eq('name', journalName)
+            .single();
+        if (error) {
+            console.error('Supabase error loading journal', journalName, error);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        console.error('loadJournalByName failed', e);
+        return null;
+    }
 }
 
 // The power of deleting code that is not currently used to reduce clutter? Knowing it is rewriteable again or findable in other versions?
@@ -501,32 +527,49 @@ function respondForLoadMessageRequest(userIdentifier, requesterIPAddress, journa
     
     // console.log("respondForLoadMessage", receivedRecord);
     var fullFileName = receivedRecord.fullFileName;
-    fs.readFile(fullFileName, "utf8", function (error, data) {
-        if (error) {
-            // TODO: Should check what sort of error and respond accordingly
-            return callback(makeFailureResponse(500, "Server error", {detail: 'Problem reading JSON from file', sha256AndLength: sha256AndLength, error: error}));
-         }
-        
-        var parsedJSON;
-        // TODO: Assumes file not too big to handle
-        try {
-            // console.log("about to parse data", data);
-            parsedJSON = JSON.parse(data);
-            // TODO: Could remove any sensitive "__pointrel_" information if needed...
-        } catch (exception) {
-            console.log("exception during JSON parsing", exception);
-            return callback(makeFailureResponse(500, "Server error", {detail: 'Problem parsing JSON from file', sha256AndLength: sha256AndLength, error: exception}));
-        }
-        
-        // Safeguard to ensure the user knows what topic this message is for if only permissions to read in a specific topic
-        if (topicIdentifier !== undefined && parsedJSON._topicIdentifier !== topicIdentifier) {
-            return callback(makeFailureResponse(404, "No message file found for sha256AndLength and topicIdentifier", {sha256AndLength: sha256AndLength, topicIdentifier: topicIdentifier}));        
-        }
-        
-        message = setOutgoingMessageTrace(userIdentifier, requesterIPAddress, journal, parsedJSON, false);
-        
-        return callback(makeSuccessResponse(200, "Success", {detail: 'Read content', sha256AndLength: sha256AndLength, message: message}));
-    });
+    if (isUsingFiles()) {
+        fs.readFile(fullFileName, "utf8", function (error, data) {
+            if (error) {
+                return callback(makeFailureResponse(500, "Server error", {detail: 'Problem reading JSON from file', sha256AndLength: sha256AndLength, error: error}));
+            }
+
+            var parsedJSON;
+            try {
+                parsedJSON = JSON.parse(data);
+            } catch (exception) {
+                console.log("exception during JSON parsing", exception);
+                return callback(makeFailureResponse(500, "Server error", {detail: 'Problem parsing JSON from file', sha256AndLength: sha256AndLength, error: exception}));
+            }
+
+            if (topicIdentifier !== undefined && parsedJSON._topicIdentifier !== topicIdentifier) {
+                return callback(makeFailureResponse(404, "No message file found for sha256AndLength and topicIdentifier", {sha256AndLength: sha256AndLength, topicIdentifier: topicIdentifier}));
+            }
+
+            message = setOutgoingMessageTrace(userIdentifier, requesterIPAddress, journal, parsedJSON, false);
+
+            return callback(makeSuccessResponse(200, "Success", {detail: 'Read content', sha256AndLength: sha256AndLength, message: message}));
+        });
+    } else {
+        supabase
+            .from('journals')
+            .select('data')
+            .eq('id', fullFileName)
+            .single()
+            .then(({ data, error }) => {
+                if (error) {
+                    return callback(makeFailureResponse(500, "Server error", {detail: 'Problem reading from Supabase', sha256AndLength: sha256AndLength, error: error}));
+                }
+                var parsedJSON = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+                if (topicIdentifier !== undefined && parsedJSON._topicIdentifier !== topicIdentifier) {
+                    return callback(makeFailureResponse(404, "No message file found for sha256AndLength and topicIdentifier", {sha256AndLength: sha256AndLength, topicIdentifier: topicIdentifier}));
+                }
+                message = setOutgoingMessageTrace(userIdentifier, requesterIPAddress, journal, parsedJSON, false);
+                return callback(makeSuccessResponse(200, "Success", {detail: 'Read content', sha256AndLength: sha256AndLength, message: message}));
+            })
+            .catch(function (error) {
+                return callback(makeFailureResponse(500, "Server error", {detail: 'Problem reading from Supabase', sha256AndLength: sha256AndLength, error: error}));
+            });
+    }
 }
 
 function sanitizeISOTimestamp(timestamp) {
@@ -619,6 +662,7 @@ function respondForStoreMessageRequest(userIdentifier, senderIPAddress, journal,
     }
     fileName += messageFileSuffix;
     
+    // Using Supabase row id as file identifier when not storing on disk
     var fullFileName = journal.journalDirectory + fileName;
     
     // Pretty printing it even though wasteful -- easier for developer to look at in stored files
@@ -636,7 +680,6 @@ function respondForStoreMessageRequest(userIdentifier, senderIPAddress, journal,
     
     if (isUsingFiles()) {
         // TODO: Write to a temp file first and then move it
-        // TODO: maybe change permission mode from default?
         log("about to write file: %s", fullFileName);
         fs.writeFile(fullFileName, buffer, function (error) {
             if (error) {
@@ -645,7 +688,23 @@ function respondForStoreMessageRequest(userIdentifier, senderIPAddress, journal,
             return finish();
         });
     } else {
-        return finish();
+        supabase
+            .from('journals')
+            .insert({ name: journal.journalIdentifier, data: canonicalMessage, created_at: receivedTimestamp })
+            .select('id')
+            .single()
+            .then(({ data, error }) => {
+                if (error) {
+                    return callback(makeFailureResponse(500, "Server error: supabase insert", { error: error }));
+                }
+                fullFileName = data.id;
+                ingestMessage(journal, receivedTimestamp, sha256AndLength, fullFileName, topicSHA256, topicTimestamp, message);
+                return callback(makeSuccessResponse(200, "Success", { detail: 'Wrote content', sha256AndLength: sha256AndLength, receivedTimestamp: receivedTimestamp }));
+            })
+            .catch(function (error) {
+                return callback(makeFailureResponse(500, "Server error: supabase insert", { error: error }));
+            });
+        return;
     }
 }
 
@@ -1017,3 +1076,4 @@ exports.getCurrentUniqueTimestamp = utility.getCurrentUniqueTimestamp;
 exports.indexAllJournals = indexAllJournals;
 exports.latestMessageForTopicSync = latestMessageForTopicSync;
 exports.getAllJournalIdentifiers = getAllJournalIdentifiers;
+exports.loadJournalByName = loadJournalByName;
