@@ -1,12 +1,17 @@
 {
-    "compilerOptions": {
-        "rootDir": "./webapp/source",  
-        "target": "es5",
-        "module": "amd",
-        "declaration": false,
-        "noImplicitAny": false,
-        "removeComments": false,
-        "noLib": false,
-        "outDir": "./webapp/js/"
-    }
+  "compilerOptions": {
+    "rootDir": "./webapp/source",
+    "baseUrl": "./webapp/source",
+    "target": "ES2020",
+    "module": "amd",
+    "declaration": false,
+    "noImplicitAny": false,
+    "removeComments": false,
+    "noLib": false,
+    "outDir": "./webapp/js/",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["webapp/**/*"]
 }

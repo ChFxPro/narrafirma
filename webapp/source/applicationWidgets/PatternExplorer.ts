@@ -1012,7 +1012,7 @@ class PatternExplorer {
                     const finishModel = dialogSupport.openFinishedDialog("Done creating CSV file of pattern statistics; save it?", 
                             "Finished generating CSV file", "Save", "Cancel", function(dialogConfiguration, hideDialogMethod) {
                         const fileName = catalysisReportName + " pattern statistics.csv";
-                        const exportBlob = new Blob([output], {type: "text/csv;charset=utf-8"});
+                        const exportBlob = new Blob([output as any], {type: "text/csv;charset=utf-8"});
                         saveAs(exportBlob, fileName);
                         hideDialogMethod();
                     });
@@ -1134,7 +1134,7 @@ class PatternExplorer {
 
         const catalysisReportName = Globals.clientState().catalysisReportName();
         const fileName = catalysisReportName + " correlations.csv";
-        const exportBlob = new Blob([output], {type: "text/csv;charset=utf-8"});
+        const exportBlob = new Blob([output as any], {type: "text/csv;charset=utf-8"});
         saveAs(exportBlob, fileName);
     }
 
@@ -2018,7 +2018,7 @@ class PatternExplorer {
         }
         output = pattern.patternName + " (" + niceGraphTypeName + ")\n\n" + output;
         if (saveFile) {
-            const exportBlob = new Blob([output], {type: "text/csv;charset=utf-8"});
+            const exportBlob = new Blob([output as any], {type: "text/csv;charset=utf-8"});
             saveAs(exportBlob, pattern.patternName + ".csv");
         } else {
             return output;
