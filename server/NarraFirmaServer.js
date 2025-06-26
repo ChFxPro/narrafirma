@@ -124,15 +124,15 @@ var server = http.createServer(app).listen(8080, function () {
 // http://stackoverflow.com/questions/5998694/how-to-create-an-https-server-in-node-js
 
 // TODO: These keys are only for testing; do not use in production!!!!
-var sslOptions = {
-    key: fs.readFileSync('test-ssl-info/pointrel-test-key.pem'),
-    cert: fs.readFileSync('test-ssl-info/pointrel-test-cert.pem')
-};
+// var sslOptions = {
+//    key: fs.readFileSync('test-ssl-info/pointrel-test-key.pem'),
+//    cert: fs.readFileSync('test-ssl-info/pointrel-test-cert.pem')
+// };
 
 // Create an HTTPS service identical to the HTTP service.
-var server2 = https.createServer(sslOptions, app).listen(8081, function () {
-  var host = server2.address().address;
-  var port = server2.address().port;
-  applicationLog(util.format("NarraFirmaServer app listening at https://%s:%s", host, port));
-});
+// var server2 = https.createServer(sslOptions, app).listen(8081, function () {
+//   var host = server2.address().address;
+//   var port = server2.address().port;
+//  applicationLog(util.format("NarraFirmaServer app listening at https://%s:%s", host, port));
+// });
 
