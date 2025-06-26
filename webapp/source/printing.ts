@@ -588,7 +588,7 @@ function printObservationsAndInterpretationsToCSV(project, catalysisReportIdenti
                 const finishModel = dialogSupport.openFinishedDialog("Done creating CSV file of observation and interpretation texts; save it?", 
                         "Finished generating CSV file", "Save", "Cancel", function(dialogConfiguration, hideDialogMethod) {
                     const fileName = options.catalysisReportName + " observation texts ("  + options.strengthTextsToReport.join(" ") + ").csv";
-                    const exportBlob = new Blob([output], {type: "text/csv;charset=utf-8"});
+                    const exportBlob = new Blob([output as any], {type: "text/csv;charset=utf-8"});
                     saveAs(exportBlob, fileName);
                     hideDialogMethod();
                 });

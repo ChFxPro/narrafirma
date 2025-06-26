@@ -101,7 +101,7 @@ function add_catalysisReportQuestionChooser(panelBuilder: PanelBuilder, model, f
                     increment(answerCounts, "false");
                 }
                 answeredQuestionsCount++;
-            } else if (value !== undefined && value !== null && value !== {} && value !== "") {
+            } else if (value !== undefined && value !== null && value !== "") {
                 answeredQuestionsCount++;
                 if (questionType === "slider") {
                     // Bin the sliders
