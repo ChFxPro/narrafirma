@@ -9,3 +9,8 @@
 npm-debug.log
 webapp/testCSS.css
 server/isolate-0x102004600-v8.log
+
+# Local environment files (may contain secrets)
+.env
+.env.*
+!.env.example
